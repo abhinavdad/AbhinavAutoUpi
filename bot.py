@@ -19,7 +19,7 @@ DB_FILE = "data.json"
 # -------- DB --------
 def load_db():
     if not os.path.exists(DB_FILE):
-        return {"upi": "yourupi@fam", "premium": []}
+        return {"upi": "abhinav62@fam", "premium": []}
     return json.load(open(DB_FILE))
 
 def save_db(data):
@@ -199,7 +199,7 @@ async def paid(client, query):
     await query.message.reply("📝 Send your UPI name")
 
 # -------- GET NAME --------
-@app.on_message(filters.text & ~filters.command(["start","premium","rmpremium","setupi"]))
+@app.on_message(filters.text & ~filters.command(["start","givekey","premium","rmpremium","setupi"]))
 async def get_name(client, message):
     uid = message.from_user.id
 
@@ -276,6 +276,18 @@ async def support(client, query):
             [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
         ])
     )
+# GIVEKEY
+@app.on_message(filters.command("givekey"))
+async def givekey(c,m):
+    if m.from_user.id!=ADMIN_ID:
+        return
+    try:
+        _,uid,key=m.text.split(maxsplit=2)
+        await c.send_message(int(uid),f"KEY:\n{key}")
+        users.pop(int(uid),None)
+        await m.reply("Done")
+    except:
+        await m.reply("Usage /givekey id key")
     
 # -------- PREMIUM ADD --------
 @app.on_message(filters.command("premium"))
