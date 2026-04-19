@@ -1,245 +1,314 @@
 import os
-import qrcode
 import json
+import time
+import qrcode
 from io import BytesIO
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# 🔑 CONFIG
+# -------- CONFIG --------
 API_ID = 34039354
 API_HASH = "e8f8739959e4fbe917f4780c13625543"
 BOT_TOKEN = "8710805840:AAESMNAP0iPBEvHEHvr5LX_nWY4qfATLgW8"
 ADMIN_ID = 8094093317
 
-app = Client("pro_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("store_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 DB_FILE = "data.json"
 
-# ---------------- DB ----------------
+# -------- DB --------
 def load_db():
     if not os.path.exists(DB_FILE):
-        return {"upi": "abhinav62@fam"}
-    with open(DB_FILE) as f:
-        return json.load(f)
+        return {"upi": "yourupi@fam", "premium": []}
+    return json.load(open(DB_FILE))
 
 def save_db(data):
     with open(DB_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 db = load_db()
-users = {}
 
-# ---------------- PRICES ----------------
-PRICES = {
+users = {}
+PAYMENTS = {}
+ALL_USERS = set()
+
+# -------- PREMIUM CHECK --------
+def is_premium(uid):
+    return uid in db.get("premium", [])
+
+# -------- MENU --------
+def main_menu(uid):
+    kb = [[InlineKeyboardButton("🛒 Shop", callback_data="shop")]]
+
+    # 🔥 IMPORTANT (AUTO HIDE / SHOW)
+    if is_premium(uid):
+        kb.append([InlineKeyboardButton("🔑 Reselling", callback_data="resale")])
+
+    kb += [
+        [InlineKeyboardButton("📦 My Orders", callback_data="orders")],
+        [InlineKeyboardButton("👤 Profile", callback_data="profile")],
+        [InlineKeyboardButton("📞 Support", callback_data="support")]
+    ]
+
+    return InlineKeyboardMarkup(kb)
+
+# -------- PRICES --------
+SHOP = {
     "drip": {"1":100,"3":200,"7":350,"15":700,"30":950},
     "hg": {"10":340,"20":600,"30":850},
     "prime": {"1":90,"3":180,"7":320,"10":370},
-    "pato": {"3":290,"7":440,"15":750,"30":1000}
+    "br": {"1":90,"7":280,"14":450,"30":800}, 
+    "pato": {"3":290,"7":440,"15":750,"30":1000}, 
+    "hax": {"10":550,"20":1050,"30":1600}
 }
 
-# ---------------- START MENU ----------------
-def main_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🛒 Shop Now", callback_data="shop")]
-    ])
+RESELL = {
+    "drip": {"1":45,"3":75,"7":145,"15":235,"30":380},
+    "hg": {"10":80,"20":140,"30":270},
+    "prime": {"1":49,"3":80,"7":150,"10":250},
+    "br": {"1":49,"7":150,"14":200,"30":350},
+    "hax": {"10":550,"20":1050,"30":1600}
+}
 
+# -------- START --------
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("🔥 Welcome to Abhinav Gaming Store Bot\n 🔥 ─── WHY CHOOSE US ───🔥\n\n🔑 Genuine Premium Keys\n⚡ Instant Auto Delivery\n🛡️ Secure UPI Payments\n💎 Unbeatable Prices\n👊 Real 24/7 Support\n━━━━━━━━━━━━━━━━━━━━━━\n💰 Let's get you a key!", reply_markup=main_menu())
+    ALL_USERS.add(message.from_user.id)
+    mention = message.from_user.mention
 
-# ---------------- SHOP ----------------
-@app.on_callback_query(filters.regex("shop"))
-async def shop(client, query):
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎮 Drip Client", callback_data="buy_drip")],
-        [InlineKeyboardButton("🎮 HG Cheats", callback_data="buy_hg")],
-        [InlineKeyboardButton("🎮 Prime Hook", callback_data="buy_prime")],
-        [InlineKeyboardButton("🎮 Pato Team", callback_data="buy_pato")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="back_main")]
-    ])
-    await query.message.edit("🎮 Select Product:", reply_markup=kb)
+    await message.reply(
+f"""💥 Yo {mention} Welcome Back To Abhinav Gaming Store Bot!!
 
-# ---------------- BACK ----------------
-@app.on_callback_query(filters.regex("back_main"))
-async def back_main(client, query):
-    await query.message.edit("🔥 Welcome to Gaming Store Bot", reply_markup=main_menu())
-
-# ---------------- SELECT DAYS ----------------
-@app.on_callback_query(filters.regex("buy_"))
-async def select_days(client, query):
-    product = query.data.replace("buy_", "")
-    users[query.from_user.id] = {"product": product}
-
-    buttons = []
-    for d, price in PRICES[product].items():
-        buttons.append([InlineKeyboardButton(f"{d} Days - ₹{price}", callback_data=f"plan_{product}_{d}")])
-
-    buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="shop")])
-
-    await query.message.edit(
-        f"📅 Select Plan for {product.upper()}:",
-        reply_markup=InlineKeyboardMarkup(buttons)
+─── WHY CHOOSE US ───
+🔥🔑 Genuine Premium Keys
+⚡ Instant Auto Delivery
+🛡️ Secure UPI Payments
+💎 Unbeatable Prices
+👊 Real 24/7 Support
+━━━━━━━━━━━━━━━━━━━━━━
+💰 Let's get you a key!""",
+        reply_markup=main_menu(message.from_user.id)
     )
 
-# ---------------- BUY ----------------
-@app.on_callback_query(filters.regex("plan_"))
+# -------- BACK --------
+@app.on_callback_query(filters.regex("back_menu"))
+async def back_menu(client, query):
+    mention = query.from_user.mention
+    await query.message.edit(
+        f"💥 Yo {mention} Welcome Back!!",
+        reply_markup=main_menu(query.from_user.id)
+    )
+
+# -------- SHOP --------
+@app.on_callback_query(filters.regex("^shop$"))
+async def shop(client, query):
+    kb = [
+        [InlineKeyboardButton("🛒DRIP CILENT", callback_data="buy|drip")],
+        [InlineKeyboardButton("🛒HG CHEATS", callback_data="buy|hg")],
+        [InlineKeyboardButton("🛒PRIME HOOK ", callback_data="buy|prime")],
+        [InlineKeyboardButton("🛒PATO TEAM", callback_data="buy|pato")],
+        [InlineKeyboardButton("🛒BR MODS ", callback_data="buy|br")],
+        [InlineKeyboardButton("🛒HAXXER PRO", callback_data="buy|hax")],
+        [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+    ]
+    await query.message.edit("🛒 SHOP", reply_markup=InlineKeyboardMarkup(kb))
+
+# -------- SHOP PLAN --------
+@app.on_callback_query(filters.regex("^buy\\|"))
 async def buy(client, query):
-    user_id = query.from_user.id
-    _, product, days = query.data.split("_")
-    amount = PRICES[product][days]
+    _, p = query.data.split("|")
+
+    kb = []
+    for d, price in SHOP[p].items():
+        kb.append([InlineKeyboardButton(f"{d} Days ₹{price}", callback_data=f"pay|shop|{p}|{d}")])
+
+    kb.append([InlineKeyboardButton("⬅ BACK", callback_data="shop")])
+
+    await query.message.edit("📅 Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+
+# -------- RESELL --------
+@app.on_callback_query(filters.regex("^resale$"))
+async def resale(client, query):
+    if not is_premium(query.from_user.id):
+        return await query.answer("Premium only", show_alert=True)
+
+    kb = [
+        [InlineKeyboardButton("🛒DRIP CILENT", callback_data="r|drip")],
+        [InlineKeyboardButton("🛒HG CHEATS", callback_data="r|hg")],
+        [InlineKeyboardButton("🛒BR MODS", callback_data="r|br")],
+        [InlineKeyboardButton("🛒PRIME HOOK", callback_data="r|prime")],
+        [InlineKeyboardButton("🛒HAX PRO", callback_data="r|hax")],
+        [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+    ]
+    await query.message.edit("🔑 RESELL STORE", reply_markup=InlineKeyboardMarkup(kb))
+
+# -------- RESELL PLAN --------
+@app.on_callback_query(filters.regex("^r\\|"))
+async def rplan(client, query):
+    _, p = query.data.split("|")
+
+    kb = []
+    for d, price in RESELL[p].items():
+        kb.append([InlineKeyboardButton(f"{d} Days ₹{price}", callback_data=f"pay|resell|{p}|{d}")])
+
+    kb.append([InlineKeyboardButton("⬅ BACK", callback_data="resale")])
+
+    await query.message.edit("📦 Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+
+# -------- PAYMENT --------
+@app.on_callback_query(filters.regex("^pay\\|"))
+async def pay(client, query):
+    _, typ, p, d = query.data.split("|")
+
+    amount = SHOP[p][d] if typ == "shop" else RESELL[p][d]
+    txn = str(int(time.time()*1000))
+
+    PAYMENTS[txn] = {
+        "uid": query.from_user.id,
+        "type": typ,
+        "product": p,
+        "days": d,
+        "amount": amount
+    }
+
     upi = db["upi"]
+    link = f"upi://pay?pa={upi}&pn=Store&am={amount}&cu=INR&tn={txn}"
 
-    upi_link = f"upi://pay?pa={upi}&pn=Shop&am={amount}&cu=INR"
-
-    qr = qrcode.make(upi_link)
+    qr = qrcode.make(link)
     bio = BytesIO()
-    bio.name = "qr.png"
     qr.save(bio, "PNG")
     bio.seek(0)
 
-    users[user_id] = {"product": product, "days": days}
-
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ I HAVE PAID", callback_data="paid")]
-    ])
-
-    await query.message.delete()
-
     await app.send_photo(
-        user_id,
+        query.from_user.id,
         photo=bio,
-        caption=f"""
-🎮 Product: {product.upper()}
-📅 Plan: {days} Days
-
-💳 UPI: {upi}
-💰 Amount: ₹{amount}
-
-👉 QR scan karke payment karo
-""",
-        reply_markup=kb
+        caption=f"💳 Pay ₹{amount}",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("PAID", callback_data=f"paid|{txn}")]
+        ])
     )
 
-# ---------------- PAID ----------------
-@app.on_callback_query(filters.regex("paid"))
+# -------- PAID --------
+@app.on_callback_query(filters.regex("^paid\\|"))
 async def paid(client, query):
-    user_id = query.from_user.id
+    txn = query.data.split("|")[1]
 
-    if user_id not in users:
-        return
+    users[query.from_user.id] = PAYMENTS[txn]
+    users[query.from_user.id]["waiting"] = True
 
-    users[user_id]["waiting_name"] = True
+    await query.message.reply("📝 Send your UPI name")
 
-    await query.message.reply("📝 Send your UPI name:")
-
-# ---------------- GIVE KEY (IMPORTANT - PEHLE) ----------------
-@app.on_message(filters.command("givekey"))
-async def give_key(client, message):
-    try:
-        if message.from_user.id != ADMIN_ID:
-            return
-
-        parts = message.text.split(maxsplit=2)
-
-        if len(parts) < 3:
-            return await message.reply("Usage:\n/givekey user_id KEY")
-
-        user_id = int(parts[1])
-        key = parts[2]
-
-        await app.send_message(
-            user_id,
-            f"✅ Payment Successful!\n\n🔑 Your Key:\n{key}"
-        )
-
-        await message.reply("✅ Key Sent")
-
-        users.pop(user_id, None)
-
-    except Exception as e:
-        await message.reply(f"Error: {e}")
-
-# ---------------- GET NAME ----------------
-@app.on_message(filters.text & ~filters.command(["givekey","setupi","start"]))
+# -------- GET NAME --------
+@app.on_message(filters.text & ~filters.command(["start","premium","rmpremium","setupi"]))
 async def get_name(client, message):
-    user_id = message.from_user.id
-    text = message.text.strip()
+    uid = message.from_user.id
 
-    if user_id not in users:
+    if uid not in users or not users[uid].get("waiting"):
         return
 
-    if not users[user_id].get("waiting_name"):
-        return
-
-    if len(text) < 3:
-        return
-
-    users[user_id]["waiting_name"] = False
-
-    data = users[user_id]
-
-    kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve_{user_id}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"reject_{user_id}")
-        ]
-    ])
-
-    await app.send_message(
-        ADMIN_ID,
-        f"""💰 Payment Request
-
-👤 User: {user_id}
-🎮 Product: {data['product']}
-📅 Days: {data['days']}
-📝 Name: {text}""",
-        reply_markup=kb
-    )
+    users[uid]["waiting"] = False
 
     await message.reply("⏳ Waiting for approval...")
 
-# ---------------- APPROVE ----------------
-@app.on_callback_query(filters.regex("approve_"))
-async def approve(client, query):
-    if query.from_user.id != ADMIN_ID:
-        return
+    await app.send_message(
+        ADMIN_ID,
+        f"""💰 PAYMENT REQUEST
 
-    user_id = int(query.data.split("_")[1])
+User: {uid}
+Type: {users[uid]['type']}
+Product: {users[uid]['product']}
+Days: {users[uid]['days']}
+Amount: ₹{users[uid]['amount']}
+UPI Name: {message.text}"""
+    )
+@app.on_callback_query(filters.regex("^profile$"))
+async def profile(client, query):
+    u = query.from_user
+    status = "👑 Premium" if is_premium(u.id) else "👤 Regular"
 
     await query.message.edit(
-        f"""✅ Approved
+f"""━━━━━━━━━━━━━━━━━━━━
+👤 YOUR PROFILE
+━━━━━━━━━━━━━━━━━━━━
 
-👤 User ID: `{user_id}`
+📛 Name: {u.first_name}
+🔗 Username: @{u.username if u.username else 'N/A'}
+🆔 User ID: {u.id}
+🏷 Account Type: {status}
 
-👉 Send:
-/givekey {user_id} YOUR-KEY"""
+━━━━━━━━━━━━━━━━━━━━""",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+        ])
     )
 
-# ---------------- REJECT ----------------
-@app.on_callback_query(filters.regex("reject_"))
-async def reject(client, query):
-    if query.from_user.id != ADMIN_ID:
+@app.on_callback_query(filters.regex("^orders$"))
+async def orders(client, query):
+    data = users.get(query.from_user.id)
+
+    if not data:
+        return await query.message.edit(
+            "📦 No orders found",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+            ])
+        )
+
+    await query.message.edit(
+f"""📦 LAST ORDER
+
+Type: {data['type']}
+Product: {data['product']}
+Days: {data['days']}
+Amount: ₹{data['amount']}""",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+        ])
+    )
+@app.on_callback_query(filters.regex("support"))
+async def support(client, query):
+    await query.message.edit(
+        "📞 Need help? We're here for you! 🤝\n"
+        "📩 Telegram: @Abhinav_x03\n"
+        "💡 Include your User ID (from Profile)\n"
+        "when contacting for faster help.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+        ])
+    )
+    
+# -------- PREMIUM ADD --------
+@app.on_message(filters.command("premium"))
+async def premium(client, message):
+    if message.from_user.id != ADMIN_ID:
         return
 
-    user_id = int(query.data.split("_")[1])
+    uid = int(message.text.split()[1])
 
-    await app.send_message(user_id, "❌ Payment Rejected")
-    await query.message.edit("❌ Rejected")
+    if uid not in db["premium"]:
+        db["premium"].append(uid)
+        save_db(db)
 
-    users.pop(user_id, None)
+    await message.reply("✅ Premium Added")
 
-# ---------------- SET UPI ----------------
-@app.on_message(filters.command("setupi"))
-async def set_upi(client, message):
+# -------- PREMIUM REMOVE --------
+@app.on_message(filters.command("rmpremium"))
+async def remove_premium(client, message):
     if message.from_user.id != ADMIN_ID:
         return
 
     try:
-        new_upi = message.text.split()[1]
-        db["upi"] = new_upi
-        save_db(db)
-        await message.reply(f"✅ UPI Updated: {new_upi}")
-    except:
-        await message.reply("Usage: /setupi yourupi@upi")
+        uid = int(message.text.split()[1])
 
-app.run()
+        if uid in db["premium"]:
+            db["premium"].remove(uid)
+            save_db(db)
+            await message.reply(f"❌ Premium Removed: {uid}")
+        else:
+            await message.reply("User not premium")
+
+    except:
+        await message.reply("Usage: /rmpremium user_id")
+
+# -------- RUN --------
+app.run()     
