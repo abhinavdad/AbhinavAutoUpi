@@ -1,83 +1,90 @@
-import os
-import json
-import time
-import qrcode
+import time, qrcode
 from io import BytesIO
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pymongo import MongoClient
+import dns.resolver
 
+dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+dns.resolver.default_resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
 # -------- CONFIG --------
 API_ID = 34039354
 API_HASH = "e8f8739959e4fbe917f4780c13625543"
 BOT_TOKEN = "8710805840:AAESMNAP0iPBEvHEHvr5LX_nWY4qfATLgW8"
 ADMIN_ID = 8094093317
 
-app = Client("store_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+MONGO_URL = "mongodb+srv://Abhinav_x07:Z1j9XF3azcjvbJsr@cluster0.ini1aqt.mongodb.net/mydb?retryWrites=true&w=majority"
 
-DB_FILE = "data.json"
+app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # -------- DB --------
-def load_db():
-    if not os.path.exists(DB_FILE):
-        return {"upi": "abhinav62@fam", "premium": []}
-    return json.load(open(DB_FILE))
+mongo = MongoClient(MONGO_URL)
+db = mongo["store"]
+users_db = db["users"]
 
-def save_db(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-db = load_db()
-
+# -------- MEMORY --------
 users = {}
-PAYMENTS = {}
-ALL_USERS = set()
+payments = {}
+def get_upi():
+    data = users_db.find_one({"_id": "upi"})
+    return data["value"] if data else "abhinav62@fam"
 
-# -------- PREMIUM CHECK --------
+def set_upi(upi):
+    users_db.update_one(
+        {"_id": "upi"},
+        {"$set": {"value": upi}},
+        upsert=True
+    )
+# -------- PREMIUM --------
 def is_premium(uid):
-    return uid in db.get("premium", [])
+    user = users_db.find_one({"_id": uid})
+    return user.get("premium", False) if user else False
+
+def add_user(uid):
+    if not users_db.find_one({"_id": uid}):
+        users_db.insert_one({"_id": uid, "premium": False})
 
 # -------- MENU --------
-def main_menu(uid):
-    kb = [[InlineKeyboardButton("🛒 Shop", callback_data="shop")]]
+def menu(uid):
+    kb = [[InlineKeyboardButton("🛒 Shop", "shop")]]
 
-    # 🔥 IMPORTANT (AUTO HIDE / SHOW)
     if is_premium(uid):
-        kb.append([InlineKeyboardButton("🔑 Reselling", callback_data="resale")])
+        kb.append([InlineKeyboardButton("🔑 Reselling", "resale")])
 
     kb += [
-        [InlineKeyboardButton("📦 My Orders", callback_data="orders")],
-        [InlineKeyboardButton("👤 Profile", callback_data="profile")],
-        [InlineKeyboardButton("📞 Support", callback_data="support")]
+        [InlineKeyboardButton("📦 My Orders", "orders")],
+        [InlineKeyboardButton("👤 Profile", "profile")],
+        [InlineKeyboardButton("📞 Support", "support")]
     ]
-
     return InlineKeyboardMarkup(kb)
 
 # -------- PRICES --------
 SHOP = {
-    "drip": {"1":100,"3":200,"7":350,"15":700,"30":950},
-    "hg": {"10":340,"20":600,"30":850},
-    "prime": {"1":90,"3":180,"7":320,"10":370},
-    "br": {"1":90,"7":280,"14":450,"30":800}, 
-    "pato": {"3":290,"7":440,"15":750,"30":1000}, 
-    "hax": {"10":550,"20":1050,"30":1600}
+    "drip":{"1":100,"3":200,"7":350,"15":700,"30":950},
+    "hg":{"10":340,"20":600,"30":850},
+    "prime":{"1":90,"3":180,"7":320,"10":370},
+    "pato":{"3":290,"7":440,"15":750,"30":1000}
 }
 
 RESELL = {
-    "drip": {"1":45,"3":75,"7":145,"15":235,"30":380},
-    "hg": {"10":80,"20":140,"30":270},
-    "prime": {"1":49,"3":80,"7":150,"10":250},
-    "br": {"1":49,"7":150,"14":200,"30":350},
-    "hax": {"10":550,"20":1050,"30":1600}
+    "drip":{"1":45,"3":75,"7":145,"15":235,"30":380},
+    "hg":{"10":80,"20":140,"30":270},
+    "br":{"1":49,"7":150,"14":200,"30":350},
+    "hax":{"10":550,"20":1100,"30":1600}
 }
+
+UPI_ID = "yourupi@fam"
 
 # -------- START --------
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    ALL_USERS.add(message.from_user.id)
-    mention = message.from_user.mention
+    user = message.from_user
+
+    name = user.first_name
+    mention = f"👤 {name} 👤 "
 
     await message.reply(
-f"""💥 Yo {mention} Welcome Back To Abhinav Gaming Store Bot!!
+f"""💥 Yo {mention} Welcome To Abhinav Gaming Store Bot!!
 
 ─── WHY CHOOSE US ───
 🔥🔑 Genuine Premium Keys
@@ -87,139 +94,185 @@ f"""💥 Yo {mention} Welcome Back To Abhinav Gaming Store Bot!!
 👊 Real 24/7 Support
 ━━━━━━━━━━━━━━━━━━━━━━
 💰 Let's get you a key!""",
-        reply_markup=main_menu(message.from_user.id)
+        reply_markup=menu(user.id)
     )
 
 # -------- BACK --------
 @app.on_callback_query(filters.regex("back_menu"))
-async def back_menu(client, query):
-    mention = query.from_user.mention
-    await query.message.edit(
-        f"💥 Yo {mention} Welcome Back!!",
-        reply_markup=main_menu(query.from_user.id)
+async def back(c,q):
+    await q.message.edit("🏠 MENU", reply_markup=menu(q.from_user.id))
+
+# -------- PROFILE --------
+@app.on_callback_query(filters.regex("profile"))
+async def profile(c,q):
+    u = q.from_user
+    status = "👑 Premium" if is_premium(u.id) else "👤 Regular"
+
+    await q.message.edit(
+f"""👤 PROFILE
+
+Name: {u.first_name}
+Username: @{u.username if u.username else 'N/A'}
+ID: {u.id}
+Type: {status}""",
+reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
+)
+
+# -------- ORDERS --------
+@app.on_callback_query(filters.regex("orders"))
+async def orders(c,q):
+    data = users.get(q.from_user.id)
+
+    if not data:
+        return await q.message.edit("No orders",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]]))
+
+    await q.message.edit(
+f"""LAST ORDER
+
+{data['product']} {data['days']}D
+₹{data['amount']}""",
+reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
+)
+
+# -------- SUPPORT --------
+@app.on_callback_query(filters.regex("support"))
+async def support(c,q):
+    await q.message.edit(
+        "Contact: @your_support",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
     )
 
 # -------- SHOP --------
 @app.on_callback_query(filters.regex("^shop$"))
-async def shop(client, query):
+async def shop(c,q):
     kb = [
-        [InlineKeyboardButton("🛒DRIP CILENT", callback_data="buy|drip")],
-        [InlineKeyboardButton("🛒HG CHEATS", callback_data="buy|hg")],
-        [InlineKeyboardButton("🛒PRIME HOOK ", callback_data="buy|prime")],
-        [InlineKeyboardButton("🛒PATO TEAM", callback_data="buy|pato")],
-        [InlineKeyboardButton("🛒BR MODS ", callback_data="buy|br")],
-        [InlineKeyboardButton("🛒HAXXER PRO", callback_data="buy|hax")],
-        [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+        [InlineKeyboardButton("DRIP","buy|drip")],
+        [InlineKeyboardButton("HG","buy|hg")],
+        [InlineKeyboardButton("PRIME","buy|prime")],
+        [InlineKeyboardButton("PATO","buy|pato")],
+        [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
-    await query.message.edit("🛒 SHOP", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("SHOP", reply_markup=InlineKeyboardMarkup(kb))
 
-# -------- SHOP PLAN --------
-@app.on_callback_query(filters.regex("^buy\\|"))
-async def buy(client, query):
-    _, p = query.data.split("|")
+# -------- BUY --------
+@app.on_callback_query(filters.regex("buy\\|"))
+async def buy(c,q):
+    _,p = q.data.split("|")
 
-    kb = []
-    for d, price in SHOP[p].items():
-        kb.append([InlineKeyboardButton(f"{d} Days ₹{price}", callback_data=f"pay|shop|{p}|{d}")])
+    kb=[]
+    for d,price in SHOP[p].items():
+        kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|shop|{p}|{d}")])
+    kb.append([InlineKeyboardButton("⬅ BACK","shop")])
 
-    kb.append([InlineKeyboardButton("⬅ BACK", callback_data="shop")])
-
-    await query.message.edit("📅 Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("Select Plan", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- RESELL --------
 @app.on_callback_query(filters.regex("^resale$"))
-async def resale(client, query):
-    if not is_premium(query.from_user.id):
-        return await query.answer("Premium only", show_alert=True)
+async def resale(c,q):
+    if not is_premium(q.from_user.id):
+        return await q.answer("Premium only", show_alert=True)
 
-    kb = [
-        [InlineKeyboardButton("🛒DRIP CILENT", callback_data="r|drip")],
-        [InlineKeyboardButton("🛒HG CHEATS", callback_data="r|hg")],
-        [InlineKeyboardButton("🛒BR MODS", callback_data="r|br")],
-        [InlineKeyboardButton("🛒PRIME HOOK", callback_data="r|prime")],
-        [InlineKeyboardButton("🛒HAX PRO", callback_data="r|hax")],
-        [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
+    kb=[
+        [InlineKeyboardButton("DRIP","r|drip")],
+        [InlineKeyboardButton("HG","r|hg")],
+        [InlineKeyboardButton("BR","r|br")],
+        [InlineKeyboardButton("HAX","r|hax")],
+        [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
-    await query.message.edit("🔑 RESELL STORE", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("RESELL", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- RESELL PLAN --------
-@app.on_callback_query(filters.regex("^r\\|"))
-async def rplan(client, query):
-    _, p = query.data.split("|")
+@app.on_callback_query(filters.regex("r\\|"))
+async def rplan(c,q):
+    _,p=q.data.split("|")
 
-    kb = []
-    for d, price in RESELL[p].items():
-        kb.append([InlineKeyboardButton(f"{d} Days ₹{price}", callback_data=f"pay|resell|{p}|{d}")])
+    kb=[]
+    for d,price in RESELL[p].items():
+        kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|resell|{p}|{d}")])
+    kb.append([InlineKeyboardButton("⬅ BACK","resale")])
 
-    kb.append([InlineKeyboardButton("⬅ BACK", callback_data="resale")])
-
-    await query.message.edit("📦 Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("Select Plan", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- PAYMENT --------
-@app.on_callback_query(filters.regex("^pay\\|"))
-async def pay(client, query):
-    _, typ, p, d = query.data.split("|")
+@app.on_callback_query(filters.regex("pay\\|"))
+async def pay(c, q):
+    _, typ, p, d = q.data.split("|")
 
     amount = SHOP[p][d] if typ == "shop" else RESELL[p][d]
-    txn = str(int(time.time()*1000))
 
-    PAYMENTS[txn] = {
-        "uid": query.from_user.id,
-        "type": typ,
+    upi = get_upi()  # 🔥 FIX
+
+    txn = str(int(time.time() * 1000))
+
+    payments[txn] = {
+        "uid": q.from_user.id,
         "product": p,
         "days": d,
         "amount": amount
     }
 
-    upi = db["upi"]
-    link = f"upi://pay?pa={upi}&pn=Store&am={amount}&cu=INR&tn={txn}"
+    link = f"upi://pay?pa={upi}&pn=Store&am={amount}&cu=INR"
 
     qr = qrcode.make(link)
     bio = BytesIO()
     qr.save(bio, "PNG")
     bio.seek(0)
 
-    await app.send_photo(
-        query.from_user.id,
-        photo=bio,
-        caption=f"💳 Pay ₹{amount}",
+    await c.send_photo(
+        q.from_user.id,
+        bio,
+        caption=f"💳 Pay ₹{amount}\n🏦 UPI: {upi}",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("PAID", callback_data=f"paid|{txn}")]
+            [InlineKeyboardButton("PAID", f"paid|{txn}")]
         ])
     )
-
 # -------- PAID --------
-@app.on_callback_query(filters.regex("^paid\\|"))
-async def paid(client, query):
-    txn = query.data.split("|")[1]
+@app.on_callback_query(filters.regex("paid\\|"))
+async def paid(c,q):
+    txn=q.data.split("|")[1]
+    users[q.from_user.id]=payments[txn]
+    users[q.from_user.id]["wait"]=True
+    await q.message.reply("Send UPI name")
 
-    users[query.from_user.id] = PAYMENTS[txn]
-    users[query.from_user.id]["waiting"] = True
+# -------- UPI NAME --------
+@app.on_message(filters.text & ~filters.command([
+    "start","givekey","premium","rmpremium","broadcast"
+]))
+async def handle_upi(c, m):
+    uid = m.from_user.id
 
-    await query.message.reply("📝 Send your UPI name")
-
-# -------- GET NAME --------
-@app.on_message(filters.text & ~filters.command(["start","givekey","premium","rmpremium","setupi"]))
-async def get_name(client, message):
-    uid = message.from_user.id
-
-    if uid not in users or not users[uid].get("waiting"):
+    if uid not in users or not users[uid].get("wait"):
         return
 
-    users[uid]["waiting"] = False
+    data = users[uid]
+    data["wait"] = False
+    data["upi"] = m.text
 
-    await message.reply("⏳ Waiting for approval...")
-
-    await app.send_message(
+    # 🔥 ADMIN MESSAGE
+    await c.send_message(
         ADMIN_ID,
-        f"""💰 PAYMENT REQUEST
+f"""💰 NEW PAYMENT
 
-User: {uid}
-Type: {users[uid]['type']}
-Product: {users[uid]['product']}
-Days: {users[uid]['days']}
-Amount: ₹{users[uid]['amount']}
-UPI Name: {message.text}"""
+👤 User: {m.from_user.mention}
+🆔 ID: {uid}
+
+📦 Product: {data['product']}
+📅 Days: {data['days']}
+💵 Amount: ₹{data['amount']}
+
+🏦 UPI: {m.text}
+
+👉 Send:
+ /givekey {uid} KEY"""
+    )
+
+    # ✅ USER MESSAGE (UPDATED)
+    await m.reply(
+"""✅ Approval Submitted To Admin
+
+⏳ Please wait while we verify your payment.
+🔑 Your key will be delivered soon."""
     )
 @app.on_callback_query(filters.regex("^profile$"))
 async def profile(client, query):
@@ -276,11 +329,13 @@ async def support(client, query):
             [InlineKeyboardButton("⬅ BACK", callback_data="back_menu")]
         ])
     )
-# GIVEKEY
+
+# -------- GIVE KEY --------
 @app.on_message(filters.command("givekey"))
 async def givekey(c,m):
     if m.from_user.id!=ADMIN_ID:
         return
+
     try:
         _,uid,key=m.text.split(maxsplit=2)
         await c.send_message(int(uid),f"KEY:\n{key}")
@@ -288,39 +343,57 @@ async def givekey(c,m):
         await m.reply("Done")
     except:
         await m.reply("Usage /givekey id key")
-    
-# -------- PREMIUM ADD --------
+
+# -------- PREMIUM --------
 @app.on_message(filters.command("premium"))
-async def premium(client, message):
-    if message.from_user.id != ADMIN_ID:
+async def prem(c,m):
+    if m.from_user.id!=ADMIN_ID:
         return
 
-    uid = int(message.text.split()[1])
+    uid=int(m.text.split()[1])
+    users_db.update_one({"_id":uid},{"$set":{"premium":True}},upsert=True)
+    await m.reply("Premium Added")
 
-    if uid not in db["premium"]:
-        db["premium"].append(uid)
-        save_db(db)
-
-    await message.reply("✅ Premium Added")
-
-# -------- PREMIUM REMOVE --------
+# -------- REMOVE PREMIUM --------
 @app.on_message(filters.command("rmpremium"))
-async def remove_premium(client, message):
-    if message.from_user.id != ADMIN_ID:
+async def rmp(c,m):
+    if m.from_user.id!=ADMIN_ID:
+        return
+
+    uid=int(m.text.split()[1])
+    users_db.update_one({"_id":uid},{"$set":{"premium":False}})
+    await m.reply("Premium Removed")
+
+# -------- BROADCAST --------
+@app.on_message(filters.command("broadcast"))
+async def bc(c,m):
+    if m.from_user.id!=ADMIN_ID:
+        return
+
+    if not m.reply_to_message:
+        return await m.reply("Reply to message")
+
+    sent=0
+    for u in users_db.find():
+        try:
+            await m.reply_to_message.copy(u["_id"])
+            sent+=1
+        except:
+            pass
+
+    await m.reply(f"Done {sent}")
+    
+@app.on_message(filters.command("setupi"))
+async def setupi(c, m):
+    if m.from_user.id != ADMIN_ID:
         return
 
     try:
-        uid = int(message.text.split()[1])
+        new_upi = m.text.split()[1]
+        set_upi(new_upi)
 
-        if uid in db["premium"]:
-            db["premium"].remove(uid)
-            save_db(db)
-            await message.reply(f"❌ Premium Removed: {uid}")
-        else:
-            await message.reply("User not premium")
-
+        await m.reply(f"✅ UPI Updated: {new_upi}")
     except:
-        await message.reply("Usage: /rmpremium user_id")
-
-# -------- RUN --------
-app.run()     
+        await m.reply("Usage:\n/setupi yourupi@id")
+   
+app.run()
