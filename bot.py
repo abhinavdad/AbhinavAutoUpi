@@ -73,7 +73,7 @@ RESELL = {
     "hax":{"10":550,"20":1100,"30":1600}
 }
 
-UPI_ID = "yourupi@fam"
+UPI_ID = "abhinav62@fam"
 
 # -------- START --------
 @app.on_message(filters.command("start"))
@@ -109,12 +109,12 @@ async def profile(c,q):
     status = "👑 Premium" if is_premium(u.id) else "👤 Regular"
 
     await q.message.edit(
-f"""👤 PROFILE
+f"""👤 YOUR PROFILE
 
-Name: {u.first_name}
-Username: @{u.username if u.username else 'N/A'}
-ID: {u.id}
-Type: {status}""",
+📛Name: {u.first_name}
+👤Username: @{u.username if u.username else 'N/A'}
+🆔ID: {u.id}
+🏷Type: {status}""",
 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
 )
 
@@ -135,14 +135,6 @@ f"""LAST ORDER
 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
 )
 
-# -------- SUPPORT --------
-@app.on_callback_query(filters.regex("support"))
-async def support(c,q):
-    await q.message.edit(
-        "Contact: @your_support",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ BACK","back_menu")]])
-    )
-
 # -------- SHOP --------
 @app.on_callback_query(filters.regex("^shop$"))
 async def shop(c,q):
@@ -153,7 +145,7 @@ async def shop(c,q):
         [InlineKeyboardButton("PATO TEAM","buy|pato")],
         [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
-    await q.message.edit("SHOP", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("━━━━━━━━━━━━━━━━━━━━\n🛒ABHINAV X STORE — SHOP\n━━━━━━━━━━━━━━━━━━━━\nChoose a product 👇", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- BUY --------
 @app.on_callback_query(filters.regex("buy\\|"))
@@ -165,7 +157,7 @@ async def buy(c,q):
         kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|shop|{p}|{d}")])
     kb.append([InlineKeyboardButton("⬅ BACK","shop")])
 
-    await q.message.edit("Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("Choose a plan 👇", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- RESELL --------
 @app.on_callback_query(filters.regex("^resale$"))
@@ -180,7 +172,7 @@ async def resale(c,q):
         [InlineKeyboardButton("HAXXER PRO RESELL","r|hax")],
         [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
-    await q.message.edit("RESELL", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("━━━━━━━━━━━━━━━━━━━━\n🛒ABHINAV X STORE — SHOP\n━━━━━━━━━━━━━━━━━━━━\nChoose a product 👇", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- RESELL PLAN --------
 @app.on_callback_query(filters.regex("r\\|"))
@@ -192,7 +184,7 @@ async def rplan(c,q):
         kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|resell|{p}|{d}")])
     kb.append([InlineKeyboardButton("⬅ BACK","resale")])
 
-    await q.message.edit("Select Plan", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.edit("Choose a plan 👇", reply_markup=InlineKeyboardMarkup(kb))
 
 # -------- PAYMENT --------
 @app.on_callback_query(filters.regex("pay\\|"))
@@ -340,7 +332,7 @@ async def givekey(c,m):
         _,uid,key=m.text.split(maxsplit=2)
         await c.send_message(int(uid),f"KEY:\n{key}")
         users.pop(int(uid),None)
-        await m.reply("Done")
+        await m.reply(f"Key Was Sended To {uid}")
     except:
         await m.reply("Usage /givekey id key")
 
@@ -352,7 +344,7 @@ async def prem(c,m):
 
     uid=int(m.text.split()[1])
     users_db.update_one({"_id":uid},{"$set":{"premium":True}},upsert=True)
-    await m.reply("Premium Added")
+    await m.reply(f"Premium Added To {uid}")
 
 # -------- REMOVE PREMIUM --------
 @app.on_message(filters.command("rmpremium"))
@@ -362,7 +354,7 @@ async def rmp(c,m):
 
     uid=int(m.text.split()[1])
     users_db.update_one({"_id":uid},{"$set":{"premium":False}})
-    await m.reply("Premium Removed")
+    await m.reply(f"Premium Removed Form {uid}")
 
 # -------- BROADCAST --------
 @app.on_message(filters.command("broadcast"))
@@ -381,7 +373,7 @@ async def bc(c,m):
         except:
             pass
 
-    await m.reply(f"Done {sent}")
+    await m.reply(f"Broadcast Was Sended To {sent} Users")
     
 @app.on_message(filters.command("setupi"))
 async def setupi(c, m):
