@@ -147,10 +147,10 @@ async def support(c,q):
 @app.on_callback_query(filters.regex("^shop$"))
 async def shop(c,q):
     kb = [
-        [InlineKeyboardButton("DRIP","buy|drip")],
-        [InlineKeyboardButton("HG","buy|hg")],
-        [InlineKeyboardButton("PRIME","buy|prime")],
-        [InlineKeyboardButton("PATO","buy|pato")],
+        [InlineKeyboardButton("DRIP CILENT","buy|drip")],
+        [InlineKeyboardButton("HG CHEATS","buy|hg")],
+        [InlineKeyboardButton("PRIME HOOK","buy|prime")],
+        [InlineKeyboardButton("PATO TEAM","buy|pato")],
         [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
     await q.message.edit("SHOP", reply_markup=InlineKeyboardMarkup(kb))
@@ -174,10 +174,10 @@ async def resale(c,q):
         return await q.answer("Premium only", show_alert=True)
 
     kb=[
-        [InlineKeyboardButton("DRIP","r|drip")],
-        [InlineKeyboardButton("HG","r|hg")],
-        [InlineKeyboardButton("BR","r|br")],
-        [InlineKeyboardButton("HAX","r|hax")],
+        [InlineKeyboardButton("DRIP CILENT RESELL","r|drip")],
+        [InlineKeyboardButton("HG CHEATS RESELL","r|hg")],
+        [InlineKeyboardButton("BR MODS RESELL","r|br")],
+        [InlineKeyboardButton("HAXXER PRO RESELL","r|hax")],
         [InlineKeyboardButton("⬅ BACK","back_menu")]
     ]
     await q.message.edit("RESELL", reply_markup=InlineKeyboardMarkup(kb))
