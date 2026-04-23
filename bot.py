@@ -19,9 +19,8 @@ app = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # -------- DB --------
 mongo = MongoClient(MONGO_URL)
-db = mongo["store"]
+db = mongo["bot"]
 users_db = db["users"]
-
 # -------- MEMORY --------
 users = {}
 payments = {}
@@ -77,13 +76,22 @@ UPI_ID = "abhinav62@fam"
 
 # -------- START --------
 @app.on_message(filters.command("start"))
-async def start(client, message):
-    user = message.from_user
+async def start(c, m):
+    user = m.from_user
 
-    name = user.first_name
-    mention = f"👤 {name} 👤 "
+    # 🔥 SAVE USER
+    users_db.update_one(
+        {"_id": user.id},
+        {
+            "$set": {
+                "name": user.first_name,
+                "username": user.username
+            }
+        },
+        upsert=True
+    )
 
-    await message.reply(
+    await m.reply(
 f"""💥 Yo {mention} Welcome To Abhinav Gaming Store Bot!!
 
 ─── WHY CHOOSE US ───
@@ -358,22 +366,28 @@ async def rmp(c,m):
 
 # -------- BROADCAST --------
 @app.on_message(filters.command("broadcast"))
-async def bc(c,m):
-    if m.from_user.id!=ADMIN_ID:
+async def broadcast(c, m):
+    if m.from_user.id != ADMIN_ID:
         return
 
     if not m.reply_to_message:
         return await m.reply("Reply to message")
 
-    sent=0
-    for u in users_db.find():
-        try:
-            await m.reply_to_message.copy(u["_id"])
-            sent+=1
-        except:
-            pass
+    msg = m.reply_to_message
 
-    await m.reply(f"Broadcast Was Sended To {sent} Users")
+    users = users_db.find()
+
+    sent = 0
+    failed = 0
+
+    for user in users:
+        try:
+            await msg.copy(user["_id"])
+            sent += 1
+        except:
+            failed += 1
+
+    await m.reply(f"✅ Sent: {sent}\n❌ Failed: {failed}")
     
 @app.on_message(filters.command("setupi"))
 async def setupi(c, m):
