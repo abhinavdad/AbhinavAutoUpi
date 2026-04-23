@@ -92,7 +92,7 @@ async def start(c, m):
     )
 
     await m.reply(
-f"""💥 Yo {mention} Welcome To Abhinav Gaming Store Bot!!
+f"""💥 Yo {user.mention} Welcome To Abhinav Gaming Store Bot!!
 
 ─── WHY CHOOSE US ───
 🔥🔑 Genuine Premium Keys
