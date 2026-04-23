@@ -60,14 +60,14 @@ def menu(uid):
 
 # -------- PRICES --------
 SHOP = {
-    "drip":{"1":100,"3":200,"7":350,"15":700,"30":950},
+    "drip":{"1":80,"3":170,"7":300,"15":650,"30":900},
     "hg":{"10":340,"20":600,"30":850},
     "prime":{"1":90,"3":180,"7":320,"10":370},
     "pato":{"3":290,"7":440,"15":750,"30":1000}
 }
 
 RESELL = {
-    "drip":{"1":45,"3":75,"7":145,"15":235,"30":380},
+    "drip":{"1":50,"3":80,"7":150,"15":245,"30":380},
     "hg":{"10":80,"20":140,"30":270},
     "br":{"1":49,"7":150,"14":200,"30":350},
     "hax":{"10":550,"20":1100,"30":1600}
@@ -154,7 +154,7 @@ async def buy(c,q):
 
     kb=[]
     for d,price in SHOP[p].items():
-        kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|shop|{p}|{d}")])
+        kb.append([InlineKeyboardButton(f"{d}Days ₹{price}",f"pay|shop|{p}|{d}")])
     kb.append([InlineKeyboardButton("⬅ BACK","shop")])
 
     await q.message.edit("Choose a plan 👇", reply_markup=InlineKeyboardMarkup(kb))
@@ -181,7 +181,7 @@ async def rplan(c,q):
 
     kb=[]
     for d,price in RESELL[p].items():
-        kb.append([InlineKeyboardButton(f"{d}D ₹{price}",f"pay|resell|{p}|{d}")])
+        kb.append([InlineKeyboardButton(f"{d}Days ₹{price}",f"pay|resell|{p}|{d}")])
     kb.append([InlineKeyboardButton("⬅ BACK","resale")])
 
     await q.message.edit("Choose a plan 👇", reply_markup=InlineKeyboardMarkup(kb))
